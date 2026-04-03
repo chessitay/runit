@@ -12,7 +12,7 @@ That's it. No config files to manage, no setup step. Just add a command and run 
 ## Install
 
 ```bash
-pip install -e .
+pip install runit-dev
 ```
 
 Requires Python 3.10+.

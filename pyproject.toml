@@ -3,16 +3,37 @@ requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "runit-cli"
+name = "runit-dev"
 version = "0.1.0"
 description = "Define and run named commands per project with runit.yaml"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
+authors = [
+    { name = "GlitchFL" },
+]
+keywords = ["cli", "commands", "runner", "automation", "developer-tools"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Build Tools",
+    "Topic :: Utilities",
+]
 dependencies = [
     "click>=8.0",
     "pyyaml>=6.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/chessitay/runit"
+Repository = "https://github.com/chessitay/runit"
+Issues = "https://github.com/chessitay/runit/issues"
 
 [project.scripts]
 runit = "runit.cli:cli"
