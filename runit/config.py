@@ -35,6 +35,13 @@ def _get_cache_path(directory: Path) -> Path:
     return cache_dir / CONFIG_FILENAME
 
 
+def global_config_path() -> Path:
+    """Return the path to the global config at ~/.config/runit/runit.yaml."""
+    config_dir = Path.home() / ".config" / "runit"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    return config_dir / CONFIG_FILENAME
+
+
 def find_config() -> Path:
     """Find or create the config path for the current directory.
 
@@ -48,6 +55,16 @@ def find_config() -> Path:
         return git_dir / CONFIG_FILENAME
 
     return _get_cache_path(cwd)
+
+
+def load_merged_config() -> dict[str, CommandConfig]:
+    """Load global commands, then overlay project commands on top.
+
+    Project commands take priority over global ones with the same name.
+    """
+    global_cmds = load_config(global_config_path())
+    project_cmds = load_config()
+    return {**global_cmds, **project_cmds}
 
 
 def load_config(path: Path | None = None) -> dict[str, CommandConfig]:

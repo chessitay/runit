@@ -2,7 +2,14 @@ import sys
 
 import click
 
-from runit.config import CommandConfig, find_config, load_config, save_config
+from runit.config import (
+    CommandConfig,
+    find_config,
+    global_config_path,
+    load_config,
+    load_merged_config,
+    save_config,
+)
 from runit.exceptions import RunitError
 from runit.runner import execute
 
@@ -23,7 +30,7 @@ def cli():
 @click.argument("name")
 def run(name):
     try:
-        commands = load_config()
+        commands = load_merged_config()
     except RunitError as e:
         click.secho(str(e), fg="red", err=True)
         sys.exit(1)
@@ -49,19 +56,45 @@ def run(name):
 
 
 @cli.command("list")
-def list_commands():
+@click.option("--global", "-g", "is_global", is_flag=True, help="Show only global commands.")
+def list_commands(is_global):
     try:
-        commands = load_config()
+        if is_global:
+            commands = load_config(global_config_path())
+            label = f"Global commands ({global_config_path()})"
+        else:
+            project_cmds = load_config()
+            global_cmds = load_config(global_config_path())
+            label = None
     except RunitError as e:
         click.secho(str(e), fg="red", err=True)
         sys.exit(1)
 
-    if not commands:
+    if is_global:
+        if not commands:
+            click.echo("No global commands defined. Use 'runit add -g' to create one.")
+            return
+        click.secho(f"{label}:\n", bold=True)
+        _print_commands(commands)
+        return
+
+    if not project_cmds and not global_cmds:
         click.echo("No commands defined yet. Use 'runit add' to create one.")
         return
 
-    config_path = find_config()
-    click.secho(f"Commands ({config_path}):\n", bold=True)
+    if global_cmds:
+        click.secho(f"Global commands ({global_config_path()}):\n", bold=True)
+        _print_commands(global_cmds)
+        click.echo()
+
+    if project_cmds:
+        click.secho(f"Project commands ({find_config()}):\n", bold=True)
+        _print_commands(project_cmds)
+    elif global_cmds:
+        click.echo("No project commands defined.")
+
+
+def _print_commands(commands: dict[str, CommandConfig]) -> None:
     for name, cmd in commands.items():
         mode_tag = f"  [{cmd.mode}]" if cmd.mode != "sequential" else ""
         if len(cmd.steps) == 1:
@@ -74,9 +107,12 @@ def list_commands():
 @click.argument("name")
 @click.argument("steps", nargs=-1, required=True)
 @click.option("--mode", "-m", type=click.Choice(["sequential", "random"]), default="sequential")
-def add(name, steps, mode):
+@click.option("--global", "-g", "is_global", is_flag=True, help="Add as a global command.")
+def add(name, steps, mode, is_global):
+    """Add a command. Usage: runit add <name> "cmd1" "cmd2" ..."""
     try:
-        commands = load_config()
+        path = global_config_path() if is_global else find_config()
+        commands = load_config(path)
     except RunitError as e:
         click.secho(str(e), fg="red", err=True)
         sys.exit(1)
@@ -86,23 +122,29 @@ def add(name, steps, mode):
         sys.exit(1)
 
     commands[name] = CommandConfig(name=name, steps=list(steps), mode=mode)
-    save_config(commands)
-    click.secho(f"Added command '{name}'", fg="green")
+    save_config(commands, path)
+    scope = "global" if is_global else "project"
+    click.secho(f"Added {scope} command '{name}'", fg="green")
 
 
 @cli.command()
 @click.argument("name")
-def remove(name):
+@click.option("--global", "-g", "is_global", is_flag=True, help="Remove a global command.")
+def remove(name, is_global):
+    """Remove a command."""
     try:
-        commands = load_config()
+        path = global_config_path() if is_global else find_config()
+        commands = load_config(path)
     except RunitError as e:
         click.secho(str(e), fg="red", err=True)
         sys.exit(1)
 
     if name not in commands:
-        click.secho(f"Command '{name}' not found.", fg="red", err=True)
+        scope = "global" if is_global else "project"
+        click.secho(f"Command '{name}' not found in {scope} commands.", fg="red", err=True)
         sys.exit(1)
 
     del commands[name]
-    save_config(commands)
-    click.secho(f"Removed command '{name}'", fg="green")
+    save_config(commands, path)
+    scope = "global" if is_global else "project"
+    click.secho(f"Removed {scope} command '{name}'", fg="green")
