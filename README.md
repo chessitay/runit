@@ -77,6 +77,15 @@ runit push              # uses tag=latest
 runit push v2.0         # uses tag=v2.0
 ```
 
+Strings with spaces work fine in quotes:
+
+```bash
+runit add greet "echo {message}"
+
+runit greet "hello world"
+# $ echo hello world
+```
+
 If you forget a required parameter, runit tells you what's missing:
 
 ```
@@ -107,11 +116,44 @@ runit add -g gp "git push"
 # Now 'runit gs' works in any directory
 ```
 
-Project commands take priority — if you have a global `build` and a project `build`, the project one wins.
+Project commands take priority - if you have a global `build` and a project `build`, the project one wins.
 
 ```bash
 runit list           # shows both global and project commands
 runit list -g        # shows only global commands
+```
+
+## Inspecting commands
+
+Use `show` to see the full details of a command - where it's stored, its mode, parameters, and every step.
+
+```bash
+runit show deploy
+# deploy
+#   source:  project (.git/runit.yaml)
+#   mode:    sequential
+#   params:  env (required), tag (default: latest)
+#   steps:
+#     1. kubectl apply -f k8s/{env}.yaml
+#     2. echo 'tag: {tag:latest}'
+```
+
+## Editing commands
+
+Update a command without having to remove and re-add it.
+
+```bash
+# Replace the steps
+runit edit deploy "new-step-1" "new-step-2"
+
+# Change just the mode
+runit edit deploy --mode random
+
+# Update both steps and mode
+runit edit deploy "new-cmd" --mode sequential
+
+# Edit a global command
+runit edit -g gs "git status -sb --porcelain"
 ```
 
 ## Removing commands
@@ -121,16 +163,43 @@ runit remove test           # remove project command
 runit remove -g gs          # remove global command
 ```
 
+## Resetting
+
+Clear all commands at once.
+
+```bash
+runit reset          # clear project commands
+runit reset -g       # clear global commands
+runit reset -a       # clear both project and global
+```
+
 ## Where are commands stored?
 
 You don't need to think about this, but if you're curious:
 
-- **Git projects** — inside `.git/runit.yaml` (invisible, not tracked)
-- **Other directories** — in `~/.cache/runit/`, keyed by folder
-- **Global commands** — in `~/.config/runit/runit.yaml`
+- **Git projects** - inside `.git/runit.yaml` (invisible, not tracked)
+- **Other directories** - in `~/.cache/runit/`, keyed by folder
+- **Global commands** - in `~/.config/runit/runit.yaml`
 
 No files in your project directory. Nothing to `.gitignore`.
 
+## All commands
+
+| Command | Description |
+|---------|-------------|
+| `runit <name> [args]` | Run a saved command |
+| `runit add <name> "cmd" ...` | Save a new command |
+| `runit edit <name> "cmd" ...` | Update an existing command |
+| `runit show <name>` | Show full command details |
+| `runit remove <name>` | Remove a command |
+| `runit reset` | Clear all commands |
+| `runit list` | List all commands |
+
+Add `-g` to `add`, `edit`, `remove`, `list`, or `reset` to target global commands.
+
+## Credit
+
+Credit to @Eyalcfish for the idea and its based on his pulse project.
 ## License
 
 MIT

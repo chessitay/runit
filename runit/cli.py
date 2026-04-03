@@ -29,6 +29,7 @@ HELP_TEXT = """Save commands, run them by name.
   runit <name> [args]       Run a saved command
   runit add <name> "cmd"    Save a new command
   runit show <name>         Show command details
+  runit edit <name> "cmd"   Update a command
   runit remove <name>       Remove a command
   runit reset               Clear all commands
   runit list                Show all commands
@@ -237,6 +238,54 @@ def add(name, steps, mode, is_global):
     save_config(commands, path)
     scope = "global" if is_global else "project"
     click.secho(f"Added {scope} command '{name}'", fg="green")
+
+
+@cli.command()
+@click.argument("name")
+@click.argument("steps", nargs=-1)
+@click.option("--mode", "-m", type=click.Choice(["sequential", "random"]), default=None,
+              help="Change mode to sequential or random.")
+@click.option("--global", "-g", "is_global", is_flag=True, help="Edit a global command.")
+def edit(name, steps, mode, is_global):
+    """Update an existing command.
+
+    \b
+    runit edit <name> "new-cmd"              Replace steps
+    runit edit <name> "step1" "step2"        Replace with new steps
+    runit edit <name> --mode random          Change mode only
+    runit edit <name> "new-cmd" -m random    Replace steps and mode
+    runit edit -g <name> "new-cmd"           Edit a global command
+    """
+    try:
+        path = global_config_path() if is_global else find_config()
+        commands = load_config(path)
+    except RunitError as e:
+        click.secho(str(e), fg="red", err=True)
+        sys.exit(1)
+
+    if name not in commands:
+        scope = "global" if is_global else "project"
+        click.secho(f"'{name}' not found in {scope} commands.", fg="red", err=True)
+        sys.exit(1)
+
+    if not steps and mode is None:
+        click.secho("Nothing to update. Provide new steps or --mode.", fg="yellow", err=True)
+        sys.exit(1)
+
+    cmd = commands[name]
+    if steps:
+        cmd.steps = list(steps)
+    if mode is not None:
+        cmd.mode = mode
+
+    save_config(commands, path)
+
+    changes = []
+    if steps:
+        changes.append("steps")
+    if mode is not None:
+        changes.append("mode")
+    click.secho(f"Updated '{name}' ({', '.join(changes)})", fg="green")
 
 
 @cli.command()
