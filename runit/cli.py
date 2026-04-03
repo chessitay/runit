@@ -13,6 +13,35 @@ from runit.config import (
 from runit.exceptions import RunitError
 from runit.runner import execute, parse_params
 
+class RunitHelpFormatter(click.HelpFormatter):
+    def write_text(self, text):
+        if text:
+            self.write(text + "\n")
+
+
+class RunitContext(click.Context):
+    formatter_class = RunitHelpFormatter
+
+
+HELP_TEXT = """Save commands, run them by name.
+
+\b
+  runit <name> [args]       Run a saved command
+  runit add <name> "cmd"    Save a new command
+  runit remove <name>       Remove a command
+  runit list                Show all commands
+\b
+Examples:
+  runit add test "pytest -v"
+  runit test
+\b
+  runit add deploy "kubectl apply -f {env}.yaml"
+  runit deploy staging
+\b
+  runit add -g gs "git status -sb"
+  runit gs
+"""
+
 
 class RunitGroup(click.Group):
     def parse_args(self, ctx, args):
@@ -21,9 +50,9 @@ class RunitGroup(click.Group):
         return super().parse_args(ctx, args)
 
 
-@click.group(cls=RunitGroup)
+@click.group(cls=RunitGroup, help=HELP_TEXT, context_settings={"max_content_width": 120})
 def cli():
-    """runit - run project commands defined per project."""
+    pass
 
 
 @cli.command(hidden=True)
@@ -38,18 +67,15 @@ def run(name, extra_args):
 
     if not commands:
         click.secho(
-            "No commands defined yet. Use 'runit add' to create one.",
+            "No commands defined yet. Run 'runit add <name> \"command\"' to create one.",
             fg="red",
             err=True,
         )
         sys.exit(1)
 
     if name not in commands:
-        click.secho(
-            f"Unknown command '{name}'. Run 'runit list' to see available commands.",
-            fg="red",
-            err=True,
-        )
+        click.secho(f"Unknown command '{name}'.", fg="red", err=True)
+        click.echo("Run 'runit list' to see available commands.")
         sys.exit(1)
 
     exit_code = execute(commands[name], list(extra_args))
@@ -59,11 +85,11 @@ def run(name, extra_args):
 @cli.command("list")
 @click.option("--global", "-g", "is_global", is_flag=True, help="Show only global commands.")
 def list_commands(is_global):
-    """List all available commands."""
+    """Show all saved commands for this project and globally."""
     try:
         if is_global:
             commands = load_config(global_config_path())
-            label = f"Global commands ({global_config_path()})"
+            label = f"Global ({global_config_path()})"
         else:
             project_cmds = load_config()
             global_cmds = load_config(global_config_path())
@@ -74,26 +100,26 @@ def list_commands(is_global):
 
     if is_global:
         if not commands:
-            click.echo("No global commands defined. Use 'runit add -g' to create one.")
+            click.echo("No global commands yet. Add one with 'runit add -g <name> \"command\"'.")
             return
         click.secho(f"{label}:\n", bold=True)
         _print_commands(commands)
         return
 
     if not project_cmds and not global_cmds:
-        click.echo("No commands defined yet. Use 'runit add' to create one.")
+        click.echo("No commands yet. Add one with 'runit add <name> \"command\"'.")
         return
 
     if global_cmds:
-        click.secho(f"Global commands ({global_config_path()}):\n", bold=True)
+        click.secho(f"Global ({global_config_path()}):\n", bold=True)
         _print_commands(global_cmds)
         click.echo()
 
     if project_cmds:
-        click.secho(f"Project commands ({find_config()}):\n", bold=True)
+        click.secho(f"Project ({find_config()}):\n", bold=True)
         _print_commands(project_cmds)
     elif global_cmds:
-        click.echo("No project commands defined.")
+        click.echo("No project commands. Add one with 'runit add <name> \"command\"'.")
 
 
 def _format_params(cmd: CommandConfig) -> str:
@@ -125,13 +151,22 @@ def _print_commands(commands: dict[str, CommandConfig]) -> None:
 @cli.command()
 @click.argument("name")
 @click.argument("steps", nargs=-1, required=True)
-@click.option("--mode", "-m", type=click.Choice(["sequential", "random"]), default="sequential")
-@click.option("--global", "-g", "is_global", is_flag=True, help="Add as a global command.")
+@click.option("--mode", "-m", type=click.Choice(["sequential", "random"]), default="sequential",
+              help="Run steps in order (default) or pick one at random.")
+@click.option("--global", "-g", "is_global", is_flag=True, help="Save as a global command (available everywhere).")
 def add(name, steps, mode, is_global):
-    """Add a command. Usage: runit add <name> "cmd1" "cmd2" ...
+    """Save a new command.
 
-    Use {var} for required params, {var:default} for optional ones.
-    Example: runit add deploy "kubectl apply -f {env}.yaml"
+    \b
+    runit add <name> "command"
+    runit add <name> "step1" "step2" "step3"
+    runit add <name> "echo {var}" --mode random
+    runit add -g <name> "command"
+
+    \b
+    Parameters:
+      Use {var} for required values, {var:default} for optional ones.
+      Pass them positionally when running: runit <name> value1 value2
     """
     try:
         path = global_config_path() if is_global else find_config()
@@ -141,7 +176,12 @@ def add(name, steps, mode, is_global):
         sys.exit(1)
 
     if name in commands:
-        click.secho(f"Command '{name}' already exists. Remove it first to replace.", fg="yellow", err=True)
+        scope = "global" if is_global else "project"
+        click.secho(
+            f"'{name}' already exists in {scope} commands. Remove it first with 'runit remove {'-g ' if is_global else ''}{name}'.",
+            fg="yellow",
+            err=True,
+        )
         sys.exit(1)
 
     commands[name] = CommandConfig(name=name, steps=list(steps), mode=mode)
@@ -154,7 +194,12 @@ def add(name, steps, mode, is_global):
 @click.argument("name")
 @click.option("--global", "-g", "is_global", is_flag=True, help="Remove a global command.")
 def remove(name, is_global):
-    """Remove a command."""
+    """Remove a saved command.
+
+    \b
+    runit remove <name>
+    runit remove -g <name>
+    """
     try:
         path = global_config_path() if is_global else find_config()
         commands = load_config(path)
@@ -164,7 +209,7 @@ def remove(name, is_global):
 
     if name not in commands:
         scope = "global" if is_global else "project"
-        click.secho(f"Command '{name}' not found in {scope} commands.", fg="red", err=True)
+        click.secho(f"'{name}' not found in {scope} commands.", fg="red", err=True)
         sys.exit(1)
 
     del commands[name]
