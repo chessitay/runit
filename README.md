@@ -94,6 +94,42 @@ Missing: env
 Usage: runit deploy <env>
 ```
 
+## Capture output as variables
+
+Sometimes a later step needs the output of an earlier one. Prefix a step with `@varname` to capture its stdout into a variable, then use `{varname}` in any step that follows.
+
+```bash
+runit add whoami "@user whoami" "echo Hello, {user}"
+
+runit whoami
+# $ @user whoami
+#   user = itayfliess
+# $ echo Hello, itayfliess
+# Hello, itayfliess
+```
+
+A more practical example — grab your local IP and use it:
+
+```bash
+runit add myip "@ip ifconfig en0 | grep 'inet ' | awk '{print \$2}'" "echo {ip}"
+
+runit myip
+# $ @ip ifconfig en0 | grep 'inet ' | awk '{print $2}'
+#   ip = 192.168.1.5
+# $ echo 192.168.1.5
+# 192.168.1.5
+```
+
+Captures can be combined with regular parameters:
+
+```bash
+runit add deploy "@host cat config/{env}.txt" "scp build.tar {host}:/app/"
+
+runit deploy staging
+```
+
+If a capture step fails, execution stops — same as any other step.
+
 ## Random mode
 
 Pick a random command from a list each time you run it.
@@ -104,6 +140,38 @@ runit add tip "echo 'commit often'" "echo 'write tests'" "echo 'take a break'" -
 runit tip
 # $ echo 'take a break'   (random pick)
 ```
+
+## Built-in commands
+
+runit ships with a set of built-in git/dev commands ready to use out of the box. They show up under "Built-in" in `runit list` and work in any project.
+
+| Command | Description |
+|---------|-------------|
+| `runit prune` | Delete local branches whose remote has been deleted |
+| `runit untrack <path>` | Remove a file from git tracking (without touching `.gitignore`) |
+| `runit loc [ext]` | Count lines of code by file type (default: `.py`) |
+| `runit heatmap` | Show the 20 most frequently changed files in git history |
+
+```bash
+runit prune
+# Fetches remote and deletes any local branches marked as gone
+
+runit untrack src/secret.txt
+# $ git rm --cached -r src/secret.txt
+
+runit loc
+# Counts all .py files
+
+runit loc ts
+# Counts all .ts files
+
+runit heatmap
+#  11 runit/cli.py
+#   4 runit/runner.py
+#   ...
+```
+
+Built-in commands can't be removed or edited, but you can override any of them by adding a project or global command with the same name.
 
 ## Global commands
 
@@ -136,6 +204,15 @@ runit show deploy
 #   steps:
 #     1. kubectl apply -f k8s/{env}.yaml
 #     2. echo 'tag: {tag:latest}'
+
+runit show myip
+# myip
+#   source:  project (.git/runit.yaml)
+#   mode:    sequential
+#   captures: ip
+#   steps:
+#     1. @ip ifconfig en0 | grep 'inet ' | awk '{print $2}'
+#     2. echo {ip}
 ```
 
 ## Editing commands
@@ -193,9 +270,17 @@ No files in your project directory. Nothing to `.gitignore`.
 | `runit show <name>` | Show full command details |
 | `runit remove <name>` | Remove a command |
 | `runit reset` | Clear all commands |
-| `runit list` | List all commands |
+| `runit list` | List all commands (built-in, global, project) |
 
 Add `-g` to `add`, `edit`, `remove`, `list`, or `reset` to target global commands.
+
+### Step syntax
+
+| Syntax | Meaning |
+|--------|---------|
+| `{var}` | Required parameter — pass positionally when running |
+| `{var:default}` | Optional parameter with a default value |
+| `@varname cmd` | Capture step — runs `cmd`, stores stdout as `varname` |
 
 ## Credit
 

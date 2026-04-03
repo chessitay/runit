@@ -57,14 +57,43 @@ def find_config() -> Path:
     return _get_cache_path(cwd)
 
 
-def load_merged_config() -> dict[str, CommandConfig]:
-    """Load global commands, then overlay project commands on top.
+def builtin_commands() -> dict[str, CommandConfig]:
+    """Return built-in commands that ship with runit."""
+    return {
+        "prune": CommandConfig(
+            name="prune",
+            steps=[
+                "git fetch -p && for b in $(git branch -vv | grep ': gone]' | awk '{print $1}'); do git branch -D $b; done"
+            ],
+        ),
+        "untrack": CommandConfig(
+            name="untrack",
+            steps=["git rm --cached -r {path}"],
+        ),
+        "loc": CommandConfig(
+            name="loc",
+            steps=[
+                "find . -name '*.{ext:py}' -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/__pycache__/*' -not -path '*/venv/*' -exec wc -l {} + | sort -n"
+            ],
+        ),
+        "heatmap": CommandConfig(
+            name="heatmap",
+            steps=[
+                "git log --pretty=format: --name-only | sed '/^$/d' | sort | uniq -c | sort -rn | head -20"
+            ],
+        ),
+    }
 
-    Project commands take priority over global ones with the same name.
+
+def load_merged_config() -> dict[str, CommandConfig]:
+    """Load built-in, global, and project commands.
+
+    Priority: project > global > built-in.
     """
+    builtins = builtin_commands()
     global_cmds = load_config(global_config_path())
     project_cmds = load_config()
-    return {**global_cmds, **project_cmds}
+    return {**builtins, **global_cmds, **project_cmds}
 
 
 def load_config(path: Path | None = None) -> dict[str, CommandConfig]:

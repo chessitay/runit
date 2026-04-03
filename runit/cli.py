@@ -4,6 +4,7 @@ import click
 
 from runit.config import (
     CommandConfig,
+    builtin_commands,
     find_config,
     global_config_path,
     load_config,
@@ -100,7 +101,6 @@ def list_commands(is_global):
         else:
             project_cmds = load_config()
             global_cmds = load_config(global_config_path())
-            label = None
     except RunitError as e:
         click.secho(str(e), fg="red", err=True)
         sys.exit(1)
@@ -113,20 +113,21 @@ def list_commands(is_global):
         _print_commands(commands)
         return
 
-    if not project_cmds and not global_cmds:
-        click.echo("No commands yet. Add one with 'runit add <name> \"command\"'.")
-        return
+    builtins = builtin_commands()
+    sections = []
 
+    if builtins:
+        sections.append(("Built-in", builtins))
     if global_cmds:
-        click.secho(f"Global ({global_config_path()}):\n", bold=True)
-        _print_commands(global_cmds)
-        click.echo()
-
+        sections.append((f"Global ({global_config_path()})", global_cmds))
     if project_cmds:
-        click.secho(f"Project ({find_config()}):\n", bold=True)
-        _print_commands(project_cmds)
-    elif global_cmds:
-        click.echo("No project commands. Add one with 'runit add <name> \"command\"'.")
+        sections.append((f"Project ({find_config()})", project_cmds))
+
+    for i, (label, cmds) in enumerate(sections):
+        if i > 0:
+            click.echo()
+        click.secho(f"{label}:\n", bold=True)
+        _print_commands(cmds)
 
 
 @cli.command()
@@ -152,10 +153,13 @@ def show(name):
 
     # Check where it lives
     project_cmds = load_config()
+    global_cmds = load_config(global_config_path())
     if name in project_cmds:
         source = f"project ({find_config()})"
-    else:
+    elif name in global_cmds:
         source = f"global ({global_config_path()})"
+    else:
+        source = "built-in"
 
     click.secho(f"{name}", bold=True)
     click.echo(f"  source:  {source}")
@@ -276,8 +280,15 @@ def edit(name, steps, mode, is_global):
         sys.exit(1)
 
     if name not in commands:
-        scope = "global" if is_global else "project"
-        click.secho(f"'{name}' not found in {scope} commands.", fg="red", err=True)
+        if name in builtin_commands():
+            click.secho(
+                f"'{name}' is a built-in command. Use 'runit add {name} \"...\"' to override it.",
+                fg="yellow",
+                err=True,
+            )
+        else:
+            scope = "global" if is_global else "project"
+            click.secho(f"'{name}' not found in {scope} commands.", fg="red", err=True)
         sys.exit(1)
 
     if not steps and mode is None:
@@ -318,8 +329,15 @@ def remove(name, is_global):
         sys.exit(1)
 
     if name not in commands:
-        scope = "global" if is_global else "project"
-        click.secho(f"'{name}' not found in {scope} commands.", fg="red", err=True)
+        if name in builtin_commands():
+            click.secho(
+                f"'{name}' is a built-in command and cannot be removed.",
+                fg="yellow",
+                err=True,
+            )
+        else:
+            scope = "global" if is_global else "project"
+            click.secho(f"'{name}' not found in {scope} commands.", fg="red", err=True)
         sys.exit(1)
 
     del commands[name]
