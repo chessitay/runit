@@ -28,6 +28,7 @@ HELP_TEXT = """Save commands, run them by name.
 \b
   runit <name> [args]       Run a saved command
   runit add <name> "cmd"    Save a new command
+  runit show <name>         Show command details
   runit remove <name>       Remove a command
   runit reset               Clear all commands
   runit list                Show all commands
@@ -121,6 +122,53 @@ def list_commands(is_global):
         _print_commands(project_cmds)
     elif global_cmds:
         click.echo("No project commands. Add one with 'runit add <name> \"command\"'.")
+
+
+@cli.command()
+@click.argument("name")
+def show(name):
+    """Show full details of a command.
+
+    \b
+    runit show <name>
+    """
+    try:
+        commands = load_merged_config()
+    except RunitError as e:
+        click.secho(str(e), fg="red", err=True)
+        sys.exit(1)
+
+    if name not in commands:
+        click.secho(f"Unknown command '{name}'.", fg="red", err=True)
+        click.echo("Run 'runit list' to see available commands.")
+        sys.exit(1)
+
+    cmd = commands[name]
+
+    # Check where it lives
+    project_cmds = load_config()
+    if name in project_cmds:
+        source = f"project ({find_config()})"
+    else:
+        source = f"global ({global_config_path()})"
+
+    click.secho(f"{name}", bold=True)
+    click.echo(f"  source:  {source}")
+    click.echo(f"  mode:    {cmd.mode}")
+
+    params = parse_params(cmd.steps)
+    if params:
+        parts = []
+        for param_name, default in params.items():
+            if default is not None:
+                parts.append(f"{param_name} (default: {default})")
+            else:
+                parts.append(f"{param_name} (required)")
+        click.echo(f"  params:  {', '.join(parts)}")
+
+    click.echo(f"  steps:")
+    for i, step in enumerate(cmd.steps, 1):
+        click.echo(f"    {i}. {step}")
 
 
 def _format_params(cmd: CommandConfig) -> str:
