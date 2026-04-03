@@ -85,6 +85,24 @@ def load_config(path: Path | None = None) -> dict[str, CommandConfig]:
     return commands
 
 
+def save_config(commands: dict[str, CommandConfig], path: Path | None = None) -> None:
+    if path is None:
+        path = find_config()
+
+    data: dict[str, dict | str] = {}
+    for name, cmd in commands.items():
+        if len(cmd.steps) == 1 and cmd.mode == "sequential":
+            data[name] = cmd.steps[0]
+        else:
+            entry: dict = {"run": cmd.steps[0] if len(cmd.steps) == 1 else cmd.steps}
+            if cmd.mode != "sequential":
+                entry["mode"] = cmd.mode
+            data[name] = entry
+
+    output = {"commands": data}
+    path.write_text(yaml.dump(output, default_flow_style=False, sort_keys=False))
+
+
 def generate_default_config() -> str:
     return """\
 # runit.yaml - define your project commands here

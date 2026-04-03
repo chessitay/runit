@@ -1,21 +1,12 @@
-# runit.yaml - define your project commands here
-# Docs: https://github.com/chessitay/runit
-
 commands:
-  # Simple single command
-  hello:
-    run: "echo 'Hello from runit!'"
-
-  # Sequence of commands (runs in order)
+  hello: echo 'Hello from runit!'
   build:
     run:
-      - "echo 'Step 1: compiling...'"
-      - "echo 'Step 2: done!'"
-
-  # Random pick from a list
+    - 'echo ''Step 1: compiling...'''
+    - 'echo ''Step 2: done!'''
   tip:
     run:
-      - "echo 'Tip: commit often'"
-      - "echo 'Tip: write tests first'"
-      - "echo 'Tip: take breaks'"
+    - 'echo ''Tip: commit often'''
+    - 'echo ''Tip: write tests first'''
+    - 'echo ''Tip: take breaks'''
     mode: random

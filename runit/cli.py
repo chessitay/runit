@@ -3,7 +3,7 @@ from pathlib import Path
 
 import click
 
-from runit.config import CONFIG_FILENAME, generate_default_config, load_config
+from runit.config import CONFIG_FILENAME, generate_default_config, load_config, save_config, CommandConfig
 from runit.exceptions import RunitError
 from runit.runner import execute
 
@@ -60,6 +60,44 @@ def list_commands():
             click.echo(f"  {name:<16} {cmd.steps[0]}{mode_tag}")
         else:
             click.echo(f"  {name:<16} ({len(cmd.steps)} steps){mode_tag}")
+
+
+@cli.command()
+@click.argument("name")
+@click.argument("steps", nargs=-1, required=True)
+@click.option("--mode", "-m", type=click.Choice(["sequential", "random"]), default="sequential")
+def add(name, steps, mode):
+    try:
+        commands = load_config()
+    except RunitError as e:
+        click.secho(str(e), fg="red", err=True)
+        sys.exit(1)
+
+    if name in commands:
+        click.secho(f"Command '{name}' already exists. Remove it first to replace.", fg="yellow", err=True)
+        sys.exit(1)
+
+    commands[name] = CommandConfig(name=name, steps=list(steps), mode=mode)
+    save_config(commands)
+    click.secho(f"Added command '{name}'", fg="green")
+
+
+@cli.command()
+@click.argument("name")
+def remove(name):
+    try:
+        commands = load_config()
+    except RunitError as e:
+        click.secho(str(e), fg="red", err=True)
+        sys.exit(1)
+
+    if name not in commands:
+        click.secho(f"Command '{name}' not found.", fg="red", err=True)
+        sys.exit(1)
+
+    del commands[name]
+    save_config(commands)
+    click.secho(f"Removed command '{name}'", fg="green")
 
 
 @cli.command()
