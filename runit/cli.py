@@ -8,8 +8,10 @@ from runit.config import (
     find_config,
     global_config_path,
     load_config,
+    load_disabled_builtins,
     load_merged_config,
     save_config,
+    save_disabled_builtins,
 )
 from runit.exceptions import RunitError
 from runit.runner import execute, parse_captures, parse_params
@@ -122,7 +124,12 @@ def list_commands(is_global):
         _print_commands(commands)
         return
 
-    builtins = builtin_commands()
+    all_builtins = builtin_commands()
+    disabled = (
+        load_disabled_builtins(global_config_path())
+        | load_disabled_builtins()
+    )
+    builtins = {k: v for k, v in all_builtins.items() if k not in disabled}
     sections = []
 
     if builtins:
@@ -337,13 +344,19 @@ def remove(name, is_global):
         click.secho(str(e), fg="red", err=True)
         sys.exit(1)
 
+    builtins = builtin_commands()
+
     if name not in commands:
-        if name in builtin_commands():
-            click.secho(
-                f"'{name}' is a built-in command and cannot be removed.",
-                fg="yellow",
-                err=True,
-            )
+        if name in builtins:
+            disabled = load_disabled_builtins(path)
+            if name in disabled:
+                click.secho(f"Built-in '{name}' is already disabled.", fg="yellow", err=True)
+                sys.exit(1)
+            disabled.add(name)
+            save_disabled_builtins(disabled, path)
+            scope = "globally" if is_global else "for this project"
+            click.secho(f"Disabled built-in command '{name}' {scope}.", fg="green")
+            return
         else:
             scope = "global" if is_global else "project"
             click.secho(f"'{name}' not found in {scope} commands.", fg="red", err=True)

@@ -140,15 +140,64 @@ def builtin_commands() -> dict[str, CommandConfig]:
     }
 
 
+def load_disabled_builtins(path: Path | None = None) -> set[str]:
+    """Return the set of disabled builtin command names from a config file."""
+    if path is None:
+        path = find_config()
+    if not path.exists():
+        return set()
+    try:
+        raw = yaml.safe_load(path.read_text())
+    except yaml.YAMLError:
+        return set()
+    if not isinstance(raw, dict):
+        return set()
+    disabled = raw.get("disabled_builtins", [])
+    if isinstance(disabled, list):
+        return {str(name) for name in disabled}
+    return set()
+
+
+def save_disabled_builtins(names: set[str], path: Path | None = None) -> None:
+    """Write the disabled_builtins list into a config file."""
+    if path is None:
+        path = find_config()
+
+    raw: dict = {}
+    if path.exists():
+        try:
+            raw = yaml.safe_load(path.read_text()) or {}
+        except yaml.YAMLError:
+            raw = {}
+    if not isinstance(raw, dict):
+        raw = {}
+
+    if names:
+        raw["disabled_builtins"] = sorted(names)
+    else:
+        raw.pop("disabled_builtins", None)
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.dump(raw, default_flow_style=False, sort_keys=False))
+
+
 def load_merged_config() -> dict[str, CommandConfig]:
     """Load built-in, global, and project commands.
 
     Priority: project > global > built-in.
+    Builtins listed in disabled_builtins (global or project) are excluded.
     """
     builtins = builtin_commands()
     global_cmds = load_config(global_config_path())
     project_cmds = load_config()
-    return {**builtins, **global_cmds, **project_cmds}
+
+    disabled = (
+        load_disabled_builtins(global_config_path())
+        | load_disabled_builtins()
+    )
+    filtered_builtins = {k: v for k, v in builtins.items() if k not in disabled}
+
+    return {**filtered_builtins, **global_cmds, **project_cmds}
 
 
 def load_config(path: Path | None = None) -> dict[str, CommandConfig]:

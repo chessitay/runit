@@ -183,7 +183,14 @@ runit glog
 # Pretty git log graph with colors, authors, dates, and branch refs
 ```
 
-Built-in commands can't be removed or edited, but you can override any of them by adding a project or global command with the same name.
+You can override any built-in by adding a project or global command with the same name, or disable one entirely:
+
+```bash
+runit remove glog        # Disable a built-in for this project
+runit remove -g glog     # Disable a built-in everywhere
+```
+
+To re-enable a disabled built-in, override it or add it back manually.
 
 ## Global commands
 
